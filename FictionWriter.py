@@ -68,7 +68,7 @@ class LyricWriter(nn.Module):
 
 def train_nn(
         epochs=5, batch_size=16, lr=1e-3,
-        max_length_final=20, load_model=True,
+        max_length_final=20, load_model=False,
         model_path="model.pt"
 ):
 
@@ -177,3 +177,4 @@ def complete_string(prefix, model_path="model.pt", temperature=0.25):
 
 train_nn(epochs=3, lr=0.001)
 # print(complete_string("all this time we've been together\n(Oh-oh-oh) and I still don't know how you feel\n", temperature=0.2))
+
