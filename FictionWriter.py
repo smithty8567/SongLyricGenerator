@@ -1,5 +1,4 @@
 import random
-import time
 
 import torch
 import torch.nn.functional as F
@@ -11,7 +10,7 @@ from tqdm import tqdm
 import CorpusGenerator as cg
 
 import os
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:256"
 # Use max_split_size_mb:512 possibly instead or max_split_size_mb:256
 
 
@@ -68,7 +67,7 @@ class LyricWriter(nn.Module):
 
 def train_nn(
         epochs=5, batch_size=16, lr=1e-3,
-        max_length_final=20, load_model=True,
+        max_length_final=20, load_model=False,
         model_path="model.pt"
 ):
 
