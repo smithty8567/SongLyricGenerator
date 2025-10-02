@@ -173,4 +173,3 @@ def get_dictionaries():
         return token2idx, idx2token
 
     return get_cleaned_corpus()[1:]
-process_corpus()
