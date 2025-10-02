@@ -10,7 +10,7 @@ from tqdm import tqdm
 import CorpusGenerator as cg
 
 import os
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:256"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 # Use max_split_size_mb:512 possibly instead or max_split_size_mb:256
 
 
@@ -66,9 +66,9 @@ class LyricWriter(nn.Module):
 
 
 def train_nn(
-        epochs=5, batch_size=16, lr=1e-3,
+        epochs=5, batch_size=8, lr=1e-3,
         max_length_final=20, load_model=False,
-        model_path="model.pt"
+        model_path="model.pt", accum_iter = 4
 ):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,14 +76,14 @@ def train_nn(
     print("Initializing corpus 1...")
     dataset = SongData()
     print("Finished initializing.")
+
     # vocab size is len + 1 because when generating dictionaries '%' character
     # got assigned 2998 index while it was already the 12th index.
-
     model = LyricWriter(vocab_size=len(dataset.token2idx) + 1).to(device)
 
     if load_model:
         model.load_state_dict(torch.load(model_path, map_location=device))
-        dataset.random_sample = False
+        dataset.random_sample = True
         dataset.max_length = max_length_final
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -91,11 +91,10 @@ def train_nn(
     total_batches = len(dataset) // batch_size
     increment_steps = max(1, total_batches // max(1, max_length_final - dataset.max_length))
 
-
+    accum_loss = 0
     for epoch in range(epochs):
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
         pbar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
-
 
         for i, (packed_inputs, packed_targets) in enumerate(pbar):
 
@@ -119,11 +118,19 @@ def train_nn(
 
             logits = model(packed_inputs)
             loss = F.cross_entropy(logits, packed_targets.data)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            # Trying batch accumulation for memory issues
+            loss = loss / accum_iter
 
-            pbar.set_postfix({'loss': loss.item(), 'max_length': dataset.max_length})
+            loss.backward()
+
+            accum_loss += loss.item()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+            if ((i + 1) % accum_iter == 0) or (i + 1 == len(pbar)):
+                optimizer.step()
+                optimizer.zero_grad()
+                pbar.set_postfix({'loss': accum_loss, 'max_length': dataset.max_length})
+                accum_loss = 0
 
             # Increase sequence length as training progresses
             if (i + 1) % increment_steps == 0 and dataset.max_length < max_length_final:
@@ -133,7 +140,6 @@ def train_nn(
         # Save model after each epoch
         torch.save(model.state_dict(), model_path)
         torch.cuda.empty_cache()
-        print(torch.cuda.memory_summary())
     print("Training complete.")
 
 
@@ -174,6 +180,6 @@ def complete_string(prefix, model_path="model.pt", temperature=0.25):
     return predict_next_string(model, prefix, token2idx, idx2token, temperature=temperature)
 
 
-train_nn(epochs=3, lr=0.001)
+train_nn(epochs=2, lr=0.001)
 # print(complete_string("all this time we've been together\n(Oh-oh-oh) and I still don't know how you feel\n", temperature=0.2))
 
