@@ -3,29 +3,11 @@ import json
 import os
 import re
 import pandas as pd
+import random
 
 from tqdm import tqdm
 
-
-def string_cleaner(lyric):
-
-    # Lowercases all the lyrics
-    lyric = lyric.lower()
-
-    # Gets rid of all names in brackets
-    lyric = re.sub(r'\[.*]\n', '', lyric)
-
-    # Gets rid of adlibs in parantheses
-    # lyric = re.sub(r'\(.*\)\n', '', lyric)
-
-    # Removes any repeated lines back to back
-    lyric = re.sub(r'\b(\w+)(\n+\1)+', '\1', lyric)
-    lyric = re.sub(r'\n+', '\n+', lyric)
-
-    return lyric
-
-
-def identify_tokens(lines, num_ngrams=3000):
+def identify_tokens(lines, num_ngrams=5000):
     """
     Build a vocabulary of the most frequent character n-grams.
 
@@ -36,17 +18,18 @@ def identify_tokens(lines, num_ngrams=3000):
     ngram_counts = collections.Counter()
 
     for line in tqdm(lines, desc=f"Creating and indexing top {num_ngrams} n-grams"):
+        if type(line) == float:
+            # An empty line (nan) was created in the lyric list when splitting the song string
+            continue
         length = len(line)
         for n in range(1, 6):  # n-grams of length 1 to 5
             for i in range(length - n + 1):
                 ngram_counts[line[i:i + n]] += 1
 
-    top_n = [token for token, _ in ngram_counts.most_common(num_ngrams - 4)]
+    top_n = [token for token, _ in ngram_counts.most_common(num_ngrams - 2)]
     token2idx = {token: idx for idx, token in enumerate(top_n)}
     token2idx['^'] = len(token2idx)
     token2idx['$'] = len(token2idx)
-    token2idx['%'] = len(token2idx)
-    token2idx['\n'] = len(token2idx)
     idx2token = {idx: token for token, idx in token2idx.items()}
     return token2idx, idx2token
 
@@ -78,23 +61,17 @@ def tokenize_list(lines, token2idx):
     """
     Tokenize a list of lines and return them sorted by length.
     """
-    tokenized_lines = [tokenize('^'+line+'$', token2idx) for line in tqdm(lines, desc="Tokenizing corpus")]
+    tokenized_lines = [tokenize('^'+line+'$', token2idx) for line in lines]
     return tokenized_lines
 
 
-def process_corpus(song_file = "english_songs.csv"):
+def process_corpus(song_file = "cleaned_songs.csv"):
 
-    # files = [f for f in os.listdir(corpus_dir) if f.endswith(".txt")]
-    df = pd.read_csv(song_file)
-    songs = df['lyrics']
+    df = pd.read_csv(song_file,header=None)
 
-    lyrics = []
-    for song_lyrics in tqdm(songs, desc="Reading and cleaning files"):
-        lines = song_lyrics.split('\n')
-        cleaned_lines = [string_cleaner(line) for line in lines]
-        if cleaned_lines:
-            cleaned_lines[-1] += '%'
-        lyrics.append('\n'.join(cleaned_lines))
+    # drops all nan indicies and resets the indicies
+    songs = df[0].dropna().reset_index(drop=True)
+    print("Number of songs:", len(songs))
 
     # Build vocab and tokenize corpus
     if all(os.path.exists(f) for f in ("token2idx.json", "idx2token.json")):
@@ -102,10 +79,8 @@ def process_corpus(song_file = "english_songs.csv"):
             token2idx = json.load(f)
         with open("idx2token.json", 'r', encoding="utf-8") as f:
             idx2token = {int(idx): token for idx, token in json.load(f).items()}
-
     else:
-        token2idx, idx2token = identify_tokens(lyrics)
-
+        token2idx, idx2token = identify_tokens(songs)
     print("Tokens identified")
 
     #Saving dictionaries
@@ -115,62 +90,63 @@ def process_corpus(song_file = "english_songs.csv"):
     with open("idx2token.json", 'w', encoding="utf-8") as f:
         json.dump(idx2token, f)
 
-    # Split at end of song (odd indexed songs)
-    lines_odd = lyrics[1::2]
-    # lines_odd = [lines_odd.strip() for lines_odd in lines_odd if 7 < len(lines_odd) < 250]
+    # Making a songs folder to hold all the jsons
+    folder = "songs_corpus"
+    os.makedirs(folder, exist_ok=True)
 
-    # Getting tokenized odd songs
-    tokens_odd = tokenize_list(lines_odd, token2idx)
-    # Saving odd corpus as corpus1
-    print("Saving odd corpus")
-    with open("corpus1.json", 'w', encoding="utf-8") as f:
-        json.dump(tokens_odd, f)
-    # Clearing memory for next corpus
-    del tokens_odd
-    del lines_odd
-
-    # Split at end of newline (even indexed songs)
-    lines_even = lyrics[0::2]
-    # lines_even = [lines_even.strip() for lines_even in lines_even if 7 < len(lines_even) < 250]
-    # Getting tokenized even songs
-    tokens_even = tokenize_list(lines_even, token2idx)
-    # Saving even corpus as corpus2
-    print("Saving even corpus")
-    with open("corpus2.json", 'w', encoding="utf-8") as f:
-        json.dump(tokens_even, f)
-
+    # Tokenizing each song into its own separate json file
+    for i, song in enumerate(tqdm(songs, desc="Tokenizing songs"),start=1):
+        # Splitting each song into a list of strings
+        lines = song.split("\n")
+        tokenized_lines = tokenize_list(lines, token2idx)
+        corpus_name = f"song{i}.json"
+        file_path = os.path.join(folder, corpus_name)
+        with open(file_path, 'w', encoding="utf-8") as f:
+            json.dump(tokenized_lines, f)
 
     return token2idx, idx2token
 
+##################################################################################
+# Grab 1000 random json files from the 1263985 songs, and put them into one file #
+##################################################################################
+# Run process_corpus to generate song json files
+def get_cleaned_corpus(num_songs = 1000):
 
-def get_cleaned_corpus():
-    """
-    Load processed corpus from disk if available, otherwise generate it.
-    """
-    if all(os.path.exists(f) for f in ("token2idx.json", "idx2token.json", "corpus1.json", "corpus2.json")):
-        with open("corpus1.json", 'r', encoding="utf-8") as f:
-            corpus1 = json.load(f)
-        with open("corpus2.json", 'r', encoding="utf-8") as f:
-            corpus2 = json.load(f)
-        with open("token2idx.json", 'r', encoding="utf-8") as f:
-            token2idx = json.load(f)
-        with open("idx2token.json", 'r', encoding="utf-8") as f:
-            idx2token = {int(idx): token for idx, token in json.load(f).items()}
-        return corpus1, corpus2, token2idx, idx2token
+    # Run process_corpus to generate song json files
+    corpus = grab_new_songs(num_songs)
 
-    return process_corpus()
-
-
-def get_dictionaries():
-    """
-    Load token dictionaries from disk if available, otherwise build them.
-    """
     if all(os.path.exists(f) for f in ("token2idx.json", "idx2token.json")):
         with open("token2idx.json", 'r', encoding="utf-8") as f:
             token2idx = json.load(f)
         with open("idx2token.json", 'r', encoding="utf-8") as f:
             idx2token = {int(idx): token for idx, token in json.load(f).items()}
-        return token2idx, idx2token
 
-    return get_cleaned_corpus()[1:]
-process_corpus()
+    return corpus, token2idx, idx2token
+
+def grab_new_songs(num_songs = 1000, directory="songs_corpus"):
+    corpus = []
+    if os.path.isdir(directory):
+        items = os.listdir(directory)
+
+        # Grabbing 1000 random songs from the corpus
+        for _ in (0, num_songs):
+            song_idx = random.randint(1, len(items) - 1)
+            corpus_name = f"song{song_idx}.json"
+            file_path = os.path.join(directory, corpus_name)
+            with open(file_path, 'r', encoding="utf-8") as f:
+                curr_song = json.load(f)
+                corpus.extend(curr_song)
+    return corpus
+
+# def get_dictionaries():
+#     """
+#     Load token dictionaries from disk if available, otherwise build them.
+#     """
+#     if all(os.path.exists(f) for f in ("token2idx.json", "idx2token.json")):
+#         with open("token2idx.json", 'r', encoding="utf-8") as f:
+#             token2idx = json.load(f)
+#         with open("idx2token.json", 'r', encoding="utf-8") as f:
+#             idx2token = {int(idx): token for idx, token in json.load(f).items()}
+#         return token2idx, idx2token
+#
+#     return get_cleaned_corpus()[1:]

@@ -181,5 +181,5 @@ def complete_string(prefix, model_path="model.pt", temperature=0.5):
     return predict_next_string(model, prefix, token2idx, idx2token, temperature=temperature)
 
 
-train_nn(epochs=2, lr=0.001)
+# train_nn(epochs=2, lr=0.001)
 # print(complete_string("she ate ", temperature=0.2))
