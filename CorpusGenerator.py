@@ -121,6 +121,7 @@ def get_cleaned_corpus(num_songs = 1000):
         with open("idx2token.json", 'r', encoding="utf-8") as f:
             idx2token = {int(idx): token for idx, token in json.load(f).items()}
 
+<<<<<<< HEAD
     return corpus, token2idx, idx2token
 
 def grab_new_songs(num_songs = 1000, directory="songs_corpus"):
@@ -150,3 +151,6 @@ def grab_new_songs(num_songs = 1000, directory="songs_corpus"):
 #         return token2idx, idx2token
 #
 #     return get_cleaned_corpus()[1:]
+=======
+    return get_cleaned_corpus()[1:]
+>>>>>>> 5c0a867576d39da5949b332fa61ffe6ff11eaf69

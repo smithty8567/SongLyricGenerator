@@ -9,11 +9,12 @@ from tqdm import tqdm
 
 import CorpusGenerator as cg
 
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
+# Use max_split_size_mb:512 possibly instead or max_split_size_mb:256
 
-class FictionData(Dataset):
-    """
-    Dataset for loading and sampling tokenized lines from the corpus.
-    """
+
+class SongData(Dataset):
 
     def __init__(self, max_length=4, random_sample=True):
         self.corpus1, self.corpus2 , self.token2idx, self.idx2token = cg.get_cleaned_corpus()
@@ -25,11 +26,6 @@ class FictionData(Dataset):
 
     def __getitem__(self, idx):
         song = self.corpus1[idx]
-        max_idx = max(song)
-        if max_idx >= len(self.token2idx):
-            print(f"Out-of-bounds index found in song: {max_idx}")
-            raise ValueError("Token index exceeds vocab size!")
-
         if self.random_sample:
             prefix_len = random.randint(2, min(len(song), self.max_length))
             song = song[:prefix_len]
@@ -49,12 +45,9 @@ def collate_fn(batch):
     return packed_inputs, packed_targets
 
 
-class FictionWriter(nn.Module):
-    """
-    GRU-based language model that predicts the next token.
-    """
+class LyricWriter(nn.Module):
 
-    def __init__(self, vocab_size, hidden_size=384):
+    def __init__(self, vocab_size, hidden_size=64):
         super().__init__()
         self.hidden_size = hidden_size
         self.word_embedding = nn.Embedding(vocab_size, hidden_size)
@@ -73,22 +66,24 @@ class FictionWriter(nn.Module):
 
 
 def train_nn(
-        epochs=5, batch_size=64, lr=1e-3,
-        max_length_final=25, load_model=False,
-        model_path="model.pt"
+        epochs=5, batch_size=8, lr=1e-3,
+        max_length_final=20, load_model=False,
+        model_path="model.pt", accum_iter = 4
 ):
-    """
-    Trains the FictionWriter model on the tokenized corpus.
-    """
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
-    print("Device was chosen. Loading dataset...")
-    dataset = FictionData()
-    model = FictionWriter(vocab_size=len(dataset.token2idx)).to(device)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cpu")
+    print("Initializing corpus 1...")
+    dataset = SongData()
+    print("Finished initializing.")
+
+    # vocab size is len + 1 because when generating dictionaries '%' character
+    # got assigned 2998 index while it was already the 12th index.
+    model = LyricWriter(vocab_size=len(dataset.token2idx) + 1).to(device)
 
     if load_model:
         model.load_state_dict(torch.load(model_path, map_location=device))
-        dataset.random_sample = False
+        dataset.random_sample = True
         dataset.max_length = max_length_final
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -96,16 +91,13 @@ def train_nn(
     total_batches = len(dataset) // batch_size
     increment_steps = max(1, total_batches // max(1, max_length_final - dataset.max_length))
 
-
+    accum_loss = 0
     for epoch in range(epochs):
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
         pbar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
 
-
         for i, (packed_inputs, packed_targets) in enumerate(pbar):
-            # Error Finding!!!!!!!!!!!!!!!!!!!!
-            if packed_inputs is None:
-                continue
+
             packed_inputs = PackedSequence(
                 packed_inputs.data,
                 packed_inputs.batch_sizes,
@@ -126,25 +118,32 @@ def train_nn(
 
             logits = model(packed_inputs)
             loss = F.cross_entropy(logits, packed_targets.data)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            # Trying batch accumulation for memory issues
+            loss = loss / accum_iter
 
-            pbar.set_postfix({'loss': loss.item(), 'max_length': dataset.max_length})
+            loss.backward()
+
+            accum_loss += loss.item()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+            if ((i + 1) % accum_iter == 0) or (i + 1 == len(pbar)):
+                optimizer.step()
+                optimizer.zero_grad()
+                pbar.set_postfix({'loss': accum_loss, 'max_length': dataset.max_length})
+                accum_loss = 0
 
             # Increase sequence length as training progresses
             if (i + 1) % increment_steps == 0 and dataset.max_length < max_length_final:
                 dataset.max_length += 1
             if dataset.max_length >= max_length_final:
                 dataset.random_sample = False
-            # Error finding!!!!!!!!!!!!!!!!!!!
-            # return 2
         # Save model after each epoch
         torch.save(model.state_dict(), model_path)
+        torch.cuda.empty_cache()
     print("Training complete.")
 
 
-def predict_next_string(model, prefix, token2idx, idx2token, max_len=50, temperature=0.5):
+def predict_next_string(model, prefix, token2idx, idx2token, max_len=100, temperature=0.25):
     """
     Generates a continuation of the input string using the trained model.
     """
@@ -171,15 +170,21 @@ def predict_next_string(model, prefix, token2idx, idx2token, max_len=50, tempera
     return ''.join([idx2token[tok] for tok in generated])
 
 
-def complete_string(prefix, model_path="model.pt", temperature=0.5):
+def complete_string(prefix, model_path="model.pt", temperature=0.25):
     """
     Loads the model and generates a completion for the given prefix.
     """
     token2idx, idx2token = cg.get_dictionaries()
-    model = FictionWriter(vocab_size=len(token2idx))
+    model = LyricWriter(vocab_size=len(token2idx) + 1)
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     return predict_next_string(model, prefix, token2idx, idx2token, temperature=temperature)
 
 
+<<<<<<< HEAD
 # train_nn(epochs=2, lr=0.001)
 # print(complete_string("she ate ", temperature=0.2))
+=======
+train_nn(epochs=2, lr=0.001)
+# print(complete_string("all this time we've been together\n(Oh-oh-oh) and I still don't know how you feel\n", temperature=0.2))
+
+>>>>>>> 5c0a867576d39da5949b332fa61ffe6ff11eaf69
