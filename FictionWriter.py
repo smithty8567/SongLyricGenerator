@@ -17,7 +17,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 class SongData(Dataset):
 
     def __init__(self, max_length=4, random_sample=True):
-        self.corpus1, self.corpus2 , self.token2idx, self.idx2token = cg.get_cleaned_corpus()
+        self.corpus1, self.token2idx, self.idx2token = cg.get_cleaned_corpus(num_songs = 750000)
         self.max_length = max_length
         self.random_sample = random_sample
 
@@ -26,20 +26,28 @@ class SongData(Dataset):
 
     def __getitem__(self, idx):
         song = self.corpus1[idx]
-        if self.random_sample:
-            prefix_len = random.randint(2, min(len(song), self.max_length))
-            song = song[:prefix_len]
+        if self.random_sample and len(song) > self.max_length:
+            start = random.randint(0, len(song) - self.max_length)
+            song = song[start:start + self.max_length]
         return torch.tensor(song, dtype=torch.long)
 
-
-def collate_fn(batch):
+def collate_fn(batch, window_size = 8):
     """
     Prepares packed input and target sequences for training.
     """
     if len(batch) == 0:
         return None, None
+
     inputs = [x[:-1] for x in batch]
     targets = [x[1:] for x in batch]
+    """
+    inputs = []
+    targets = []
+    for song in batch:
+        for i in range(0, len(song)-window_size):
+            inputs.append(song[i:i + window_size])
+            targets.append(song[i + 1:i + window_size + 1])
+    """
     packed_inputs = pack_sequence(inputs, enforce_sorted=False)
     packed_targets = pack_sequence(targets, enforce_sorted=False)
     return packed_inputs, packed_targets
@@ -47,11 +55,11 @@ def collate_fn(batch):
 
 class LyricWriter(nn.Module):
 
-    def __init__(self, vocab_size, hidden_size=64):
+    def __init__(self, vocab_size, hidden_size=256):
         super().__init__()
         self.hidden_size = hidden_size
         self.word_embedding = nn.Embedding(vocab_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size, num_layers=2, batch_first=True, dropout=0.3)
+        self.gru = nn.GRU(hidden_size, hidden_size, num_layers=4, batch_first=True, dropout=0.3)
         self.decoder = nn.Linear(hidden_size, vocab_size, bias=False)
         self.decoder.weight = self.word_embedding.weight  # Weight tying
 
@@ -66,7 +74,7 @@ class LyricWriter(nn.Module):
 
 
 def train_nn(
-        epochs=5, batch_size=8, lr=1e-3,
+        epochs=15, batch_size=32, lr=1e-3,
         max_length_final=20, load_model=False,
         model_path="model.pt", accum_iter = 4
 ):
@@ -97,7 +105,6 @@ def train_nn(
         pbar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
 
         for i, (packed_inputs, packed_targets) in enumerate(pbar):
-
             packed_inputs = PackedSequence(
                 packed_inputs.data,
                 packed_inputs.batch_sizes,
@@ -110,12 +117,12 @@ def train_nn(
                 packed_targets.sorted_indices,
                 packed_targets.unsorted_indices
             )
+
+
             packed_inputs = packed_inputs.to(device)
             packed_targets = packed_targets.to(device)
 
             model.train()
-            optimizer.zero_grad()
-
             logits = model(packed_inputs)
             loss = F.cross_entropy(logits, packed_targets.data)
             # Trying batch accumulation for memory issues
@@ -140,10 +147,15 @@ def train_nn(
         # Save model after each epoch
         torch.save(model.state_dict(), model_path)
         torch.cuda.empty_cache()
+        #refresh corpus to new songs every 10 epochs
+        if epoch%10 == 0:
+            dataset = SongData()
+
+
     print("Training complete.")
 
 
-def predict_next_string(model, prefix, token2idx, idx2token, max_len=100, temperature=0.25):
+def predict_next_string(model, prefix, token2idx, idx2token, max_len=50, temperature=0.25):
     """
     Generates a continuation of the input string using the trained model.
     """
@@ -180,11 +192,7 @@ def complete_string(prefix, model_path="model.pt", temperature=0.25):
     return predict_next_string(model, prefix, token2idx, idx2token, temperature=temperature)
 
 
-<<<<<<< HEAD
-# train_nn(epochs=2, lr=0.001)
-# print(complete_string("she ate ", temperature=0.2))
-=======
-train_nn(epochs=2, lr=0.001)
-# print(complete_string("all this time we've been together\n(Oh-oh-oh) and I still don't know how you feel\n", temperature=0.2))
 
->>>>>>> 5c0a867576d39da5949b332fa61ffe6ff11eaf69
+train_nn(epochs=20, lr=0.001)
+print(complete_string("all this time we've been together\n(Oh-oh-oh) and I still don't know how you feel\n", temperature=0.2))
+

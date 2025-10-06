@@ -22,6 +22,7 @@ def string_cleaner(lyric):
     lyric = re.sub(r'\n+', r'\n', lyric)
 
     lyric = re.sub(r'igga', r'****', lyric)
+    lyric = re.sub(r'igger', r'*****', lyric)
 
     return lyric
 

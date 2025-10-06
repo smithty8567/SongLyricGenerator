@@ -110,21 +110,23 @@ def process_corpus(song_file = "cleaned_songs.csv"):
 # Grab 1000 random json files from the 1263985 songs, and put them into one file #
 ##################################################################################
 # Run process_corpus to generate song json files
-def get_cleaned_corpus(num_songs = 1000):
+def get_cleaned_corpus(num_songs = 100000):
 
     # Run process_corpus to generate song json files
     corpus = grab_new_songs(num_songs)
+    dict_dir = os.path.join("Dictionaries", "Dictionaries")
+    token2idx_path = os.path.join(dict_dir, "token2idx.json")
+    idx2token_path = os.path.join(dict_dir, "idx2token.json")
 
-    if all(os.path.exists(f) for f in ("token2idx.json", "idx2token.json")):
-        with open("token2idx.json", 'r', encoding="utf-8") as f:
+    if all(os.path.exists(f) for f in (token2idx_path, idx2token_path)):
+        with open(token2idx_path, 'r', encoding="utf-8") as f:
             token2idx = json.load(f)
-        with open("idx2token.json", 'r', encoding="utf-8") as f:
+        with open(idx2token_path, 'r', encoding="utf-8") as f:
             idx2token = {int(idx): token for idx, token in json.load(f).items()}
 
-<<<<<<< HEAD
     return corpus, token2idx, idx2token
 
-def grab_new_songs(num_songs = 1000, directory="songs_corpus"):
+def grab_new_songs(num_songs = 100000, directory= os.path.join("songs_corpus", "songs_corpus")):
     corpus = []
     if os.path.isdir(directory):
         items = os.listdir(directory)
@@ -139,6 +141,19 @@ def grab_new_songs(num_songs = 1000, directory="songs_corpus"):
                 corpus.extend(curr_song)
     return corpus
 
+def get_dictionaries():
+    dict_dir = os.path.join("Dictionaries", "Dictionaries")
+    token2idx_path = os.path.join(dict_dir, "token2idx.json")
+    idx2token_path = os.path.join(dict_dir, "idx2token.json")
+
+    if all(os.path.exists(f) for f in (token2idx_path, idx2token_path)):
+        with open(token2idx_path, 'r', encoding="utf-8") as f:
+            token2idx = json.load(f)
+        with open(idx2token_path, 'r', encoding="utf-8") as f:
+            idx2token = {int(idx): token for idx, token in json.load(f).items()}
+
+    return token2idx, idx2token
+
 # def get_dictionaries():
 #     """
 #     Load token dictionaries from disk if available, otherwise build them.
@@ -151,6 +166,3 @@ def grab_new_songs(num_songs = 1000, directory="songs_corpus"):
 #         return token2idx, idx2token
 #
 #     return get_cleaned_corpus()[1:]
-=======
-    return get_cleaned_corpus()[1:]
->>>>>>> 5c0a867576d39da5949b332fa61ffe6ff11eaf69
