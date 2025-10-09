@@ -49,7 +49,7 @@ def collate_fn(batch):
 
 class SongWriter(nn.Module):
 
-    def __init__(self, vocab_size, hidden_size=200):
+    def __init__(self, vocab_size, hidden_size=250):
         super().__init__()
         self.hidden_size = hidden_size
         self.word_embedding = nn.Embedding(vocab_size, hidden_size)
@@ -68,9 +68,9 @@ class SongWriter(nn.Module):
 
 
 def train_nn(
-        epochs=5, batch_size=16, lr=1e-3,
-        max_length_final=20, load_model=False,
-        model_path="model.pt", num_songs = 125000
+        epochs=5, batch_size=8, lr=1e-3,
+        max_length_final=20, load_model=True,
+        model_path="gruModel.pt", num_songs = 50000
 ):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -126,12 +126,6 @@ def train_nn(
 
             optimizer.step()
 
-            # Clearing some references
-            del logits
-            del loss
-            del packed_inputs
-            del packed_targets
-
             # Increase sequence length as training progresses
             if (i + 1) % increment_steps == 0 and dataset.max_length < max_length_final:
                 dataset.max_length += 1
@@ -139,20 +133,27 @@ def train_nn(
                 dataset.random_sample = False
 
         # Save model after each epoch
-        torch.save(model.state_dict(), model_path)
-        torch.cuda.empty_cache()
+        torch.save(model.state_dict(), "gruModel.pt")
         print(f"Epoch {epoch + 1} loss: {loss.item()}")
         print(complete_string("I've been unsure of my own emotions\nLook and you'll find a real roller-coaster\n"))
+
+        # Clearing some references
+        del logits
+        del loss
+        del packed_inputs
+        del packed_targets
+        torch.cuda.empty_cache()
     print("Training complete.")
 
 
-def predict_next_string(model, prefix, token2idx, idx2token, max_len=30, temperature=0.15):
+def predict_next_string(model, prefix, token2idx, idx2token, max_len=50, temperature=0.15):
 
     model.eval()
     device = next(model.parameters()).device
     tokens = cg.tokenize('^' + prefix, token2idx)
     generated = tokens[:]
 
+    lines = 0
     while len(generated) < max_len:
         input_tensor = torch.tensor(generated, dtype=torch.long, device=device).unsqueeze(0)
         packed_input = pack_sequence([input_tensor.squeeze(0)], enforce_sorted=False)
@@ -163,13 +164,21 @@ def predict_next_string(model, prefix, token2idx, idx2token, max_len=30, tempera
             probs = F.softmax(logits, dim=-1)
             next_token_id = torch.multinomial(probs, num_samples=1).item()
 
-        if idx2token[next_token_id] != '%':
-            generated.append(next_token_id)
+        generated.append(next_token_id)
+        if idx2token[next_token_id] == '%' or lines == 3:
+            break
+        if idx2token[next_token_id] == '$':
+            lines += 1
 
-    return ''.join([idx2token[tok] for tok in generated])
+    generated_lyrics = ''
+    for tok in generated:
+        generated_lyrics += idx2token[tok]
+        if idx2token[tok] == '$':
+            generated_lyrics +='\n'
+    return generated_lyrics
 
 
-def complete_string(prefix, model_path="model.pt", temperature=0.15):
+def complete_string(prefix, model_path="gruModel.pt", temperature=0.15):
 
     token2idx, idx2token = cg.get_dictionaries()
     model = SongWriter(vocab_size=len(token2idx))
@@ -177,4 +186,11 @@ def complete_string(prefix, model_path="model.pt", temperature=0.15):
     return predict_next_string(model, prefix, token2idx, idx2token, temperature=temperature)
 
 if __name__ == "__main__":
-    train_nn(epochs = 10)
+    # train_nn(epochs = 5)
+    for i in range(1,11):
+        temperature = 0.01 * i
+        print("------------------------------------------------------")
+        print("Prediction with temperature {}".format(temperature))
+        print(complete_string("I've been unsure of my own emotions\nLook and you'll find a real roller-coaster",
+                              temperature=temperature ))
+
