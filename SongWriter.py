@@ -68,8 +68,8 @@ class SongWriter(nn.Module):
 
 
 def train_nn(
-        epochs=5, batch_size=32, lr=1e-3,
-        max_length_final=20, load_model=True,
+        epochs=5, batch_size=16, lr=1e-3,
+        max_length_final=20, load_model=False,
         model_path="model.pt", num_songs = 125000
 ):
 
@@ -90,10 +90,12 @@ def train_nn(
     total_batches = len(dataset) // batch_size
     increment_steps = max(1, total_batches // max(1, max_length_final - dataset.max_length))
 
+
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False,
+                            collate_fn=collate_fn, num_workers=2)
+
     for epoch in range(epochs):
         dataset.updateSongs(song_amt = num_songs)
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False,
-                                collate_fn=collate_fn, num_workers=8)
         pbar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
 
         for i, (packed_inputs, packed_targets) in enumerate(pbar):
@@ -124,15 +126,23 @@ def train_nn(
 
             optimizer.step()
 
+            # Clearing some references
+            del logits
+            del loss
+            del packed_inputs
+            del packed_targets
+
             # Increase sequence length as training progresses
             if (i + 1) % increment_steps == 0 and dataset.max_length < max_length_final:
                 dataset.max_length += 1
             if dataset.max_length >= max_length_final:
                 dataset.random_sample = False
+
         # Save model after each epoch
         torch.save(model.state_dict(), model_path)
         torch.cuda.empty_cache()
         print(f"Epoch {epoch + 1} loss: {loss.item()}")
+        print(complete_string("I've been unsure of my own emotions\nLook and you'll find a real roller-coaster\n"))
     print("Training complete.")
 
 
@@ -153,10 +163,8 @@ def predict_next_string(model, prefix, token2idx, idx2token, max_len=30, tempera
             probs = F.softmax(logits, dim=-1)
             next_token_id = torch.multinomial(probs, num_samples=1).item()
 
-        generated.append(next_token_id)
-
-        if idx2token[next_token_id] == '%':
-            break
+        if idx2token[next_token_id] != '%':
+            generated.append(next_token_id)
 
     return ''.join([idx2token[tok] for tok in generated])
 
