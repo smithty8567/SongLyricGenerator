@@ -20,6 +20,7 @@ def string_cleaner(lyric):
     lyric = re.sub(r'\n+', r'\n', lyric)
 
     lyric = re.sub(r'igga', r'****', lyric)
+    lyric = re.sub(r'igger', r'*****', lyric)
 
     return lyric
 
@@ -38,4 +39,5 @@ def clean_songs(data = "english_songs.csv"):
     with open('cleaned_songs.csv', 'w',encoding='utf-8', newline='') as csv_file:
         wr = csv.writer(csv_file)
         for song in tqdm(cleaned_songs, desc="Writing csv"):
+
             wr.writerow([song])
