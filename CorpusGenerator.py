@@ -29,17 +29,16 @@ def identify_tokens(lines, num_ngrams=10000):
 
 
 def tokenize(text, token2idx):
-    """
-    Convert text into a list of token IDs.
 
-    Uses greedy longest-match-first tokenization with a max token length of 5.
-    """
+    # Convert text into a list of token IDs
+    # Uses greedy longest-match-first tokenization with a max token length of 8
+
     text = text.lower()
     text = re.sub(r"[^a-z,.?!':; %$^()\n-]", '', text)
     tokens = []
     idx = 0
     while idx < len(text):
-        for token_length in range(min(5, len(text) - idx), 0, -1):
+        for token_length in range(min(8, len(text) - idx), 0, -1):
             substring = text[idx: idx + token_length]
             if substring in token2idx:
                 tokens.append(token2idx[substring])
@@ -52,18 +51,17 @@ def tokenize(text, token2idx):
 
 
 def tokenize_list(lines, token2idx):
-    """
-    Tokenize a list of lines and return them sorted by length.
-    """
+
+    # Tokenize a list of song lyrics
     tokenized_lines = [tokenize('^'+line+'$', token2idx) for line in lines]
     return tokenized_lines
 
 
-def process_corpus(song_file = "cleaned_songs.csv"):
+def process_corpus(song_file = "cleaned_songs.csv", num_songs = 1000000):
 
     df = pd.read_csv(song_file,header=None)
 
-    # drops all nan indicies and resets the indicies
+    # Drops all nan indicies and resets the indicies
     songs = df[0].dropna().reset_index(drop=True)
     print("Number of songs:", len(songs))
 
@@ -77,7 +75,7 @@ def process_corpus(song_file = "cleaned_songs.csv"):
         token2idx, idx2token = identify_tokens(songs)
     print("Tokens identified")
 
-    #Saving dictionaries
+    # Saving dictionaries
     print("Saving dictionaries")
     with open("token2idx.json", 'w', encoding="utf-8") as f:
         json.dump(token2idx, f)
@@ -90,8 +88,7 @@ def process_corpus(song_file = "cleaned_songs.csv"):
 
     # Tokenizing each song into its own separate json file
     for i, song in enumerate(tqdm(songs, desc="Tokenizing songs"),start=1):
-        # Grabbing first 1 million songs only
-        if i == 1000000:
+        if i == num_songs:
             break
 
         # Splitting each song into a list of strings
@@ -123,7 +120,7 @@ def grab_new_songs(num_songs = 125000, directory="songs_corpus"):
     if os.path.isdir(directory):
         items = os.listdir(directory)
 
-        # Grabbing num_songs random songs from the corpus
+        # Grabbing a set number of songs from the corpus
         for _ in range(0, num_songs):
             song_idx = random.randint(1, len(items) - 1)
             corpus_name = f"song{song_idx}.json"
@@ -134,9 +131,9 @@ def grab_new_songs(num_songs = 125000, directory="songs_corpus"):
     return corpus
 
 def get_dictionaries():
-    """
-    Load token dictionaries from disk if available, otherwise build them.
-    """
+
+    # Load token dictionaries from disk if available, otherwise build them
+
     if all(os.path.exists(f) for f in ("token2idx.json", "idx2token.json")):
         with open("token2idx.json", 'r', encoding="utf-8") as f:
             token2idx = json.load(f)

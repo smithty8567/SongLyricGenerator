@@ -9,7 +9,7 @@ def string_cleaner(lyric):
     # Lowercases all the lyrics
     lyric = lyric.lower()
 
-    # Gets rid of all names in brackets
+    # Gets rid of all names and verse descriptions in brackets
     lyric = re.sub(r'\[.*]\n', '', lyric)
 
     # Gets rid of adlibs in parantheses
@@ -23,10 +23,11 @@ def string_cleaner(lyric):
 
     return lyric
 
+# Dataset link: https://www.kaggle.com/datasets/carlosgdcj/genius-song-lyrics-with-language-information
 def clean_songs(data = "english_songs.csv"):
-    print("Loading csv")
+
     df = pd.read_csv(data,encoding='utf-8')
-    print("csv loaded")
+
     songs = df['lyrics']
     cleaned_songs = []
     for song_lyrics in tqdm(songs, desc="Reading and cleaning files"):

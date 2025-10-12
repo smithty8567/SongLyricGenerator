@@ -9,7 +9,7 @@ import CorpusGenerator as cg
 
 import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
-# Use max_split_size_mb:512 possibly instead or max_split_size_mb:256
+
 
 
 class SongData(Dataset):
@@ -23,6 +23,8 @@ class SongData(Dataset):
         return len(self.corpus)
 
     def __getitem__(self, idx):
+        # Item size is the amount of lines passed in at one time
+
         end = min(idx+self.item_size, self.__len__())
         song_lines = []
         lines = self.corpus[idx: end]
@@ -31,13 +33,12 @@ class SongData(Dataset):
         return torch.tensor(song_lines, dtype=torch.long)
 
     def updateSongs(self, song_amt):
+        # Update the corpus with new songs
         self.corpus = cg.grab_new_songs(num_songs = song_amt)
 
 
 def collate_fn(batch):
-    """
-    Prepares packed input and target sequences for training.
-    """
+    # Packing inputs and targets to help train with variable length lines
     if len(batch) == 0:
         return None, None
     inputs = [x[:-1] for x in batch]
@@ -64,6 +65,7 @@ class SongWriter(nn.Module):
             packed_input.sorted_indices, packed_input.unsorted_indices
         )
         packed_output, _ = self.gru(packed_embedded)
+
         return self.decoder(packed_output.data)
 
 
@@ -95,6 +97,7 @@ def train_nn(
                             collate_fn=collate_fn, num_workers=2)
 
     for epoch in range(epochs):
+        # Update the dataset with new songs every epoch
         dataset.updateSongs(song_amt = num_songs)
         pbar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
 
@@ -146,7 +149,7 @@ def train_nn(
     print("Training complete.")
 
 
-def predict_next_string(model, prefix, token2idx, idx2token, max_len=50, temperature=0.15):
+def predict_next_string(model, prefix, token2idx, idx2token, max_len=250, temperature=0.15):
 
     model.eval()
     device = next(model.parameters()).device
@@ -165,7 +168,9 @@ def predict_next_string(model, prefix, token2idx, idx2token, max_len=50, tempera
             next_token_id = torch.multinomial(probs, num_samples=1).item()
 
         generated.append(next_token_id)
-        if idx2token[next_token_id] == '%' or lines == 3:
+
+        # Generates at most 4 more lines of song lyrics
+        if idx2token[next_token_id] == '%' or lines == 4:
             break
         if idx2token[next_token_id] == '$':
             lines += 1
@@ -177,7 +182,6 @@ def predict_next_string(model, prefix, token2idx, idx2token, max_len=50, tempera
             generated_lyrics +='\n'
     return generated_lyrics
 
-
 def complete_string(prefix, model_path="gruModel.pt", temperature=0.15):
 
     token2idx, idx2token = cg.get_dictionaries()
@@ -188,9 +192,8 @@ def complete_string(prefix, model_path="gruModel.pt", temperature=0.15):
 if __name__ == "__main__":
     # train_nn(epochs = 5)
     for i in range(1,11):
-        temperature = 0.01 * i
+        temperature = 0.025 * i
         print("------------------------------------------------------")
         print("Prediction with temperature {}".format(temperature))
-        print(complete_string("I've been unsure of my own emotions\nLook and you'll find a real roller-coaster",
+        print(complete_string("the sound for you\n^but if you want to give it up",
                               temperature=temperature ))
-
