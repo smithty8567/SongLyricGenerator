@@ -19,13 +19,83 @@ Our project uses a 10000 token dictionary that is filled with n-grams from lengt
 
 Using n-grams helps the GRU learn words without actually being given words. Our dictionary grabs the 10000 most frequent n-grams found throughout all 2.5 million songs to use at its vocabulary.
 
-To generate our corpus, we tokenized every line with a greedy algorithm to grab the longest sequence of characters that is part of our dictionary. We then converted a set amount of our songs into a json file where each song is its own json file. We decided on 1 million songs as our size for this GRU.
+To generate our corpus, we tokenized eveSury line with a greedy algorithm to grab the longest sequence of characters that is part of our dictionary. We then converted a set amount of our songs into a json file where each song is its own json file. We decided on 1 million songs as our size for this GRU.
 
 ## Example of generated lyrics
-Giving our GRU two lines for some context to generate lyrics, our GRU was able to fully generate the following lines on its own:
+### Generating lyrics from a song in the training set
+------------------------------------------------------
+#### Given Lines: 
 
-cause i could get her this world <br>
-but i'm just like a star with me <br>
-the sound for you <br>
-but if you want to give it up <br>
-it's time that you're gonna be right <br>
+Life's a game but it's not fair
+
+break the rules, so I don't care
+
+------------------------------------------------------
+
+#### Prediction with temperature = 0.15
+Life's a game, but it's not fair
+
+I break the rules, so I don't care
+
+And I ain't gotta get down
+
+I gotta make 'em
+
+### Generating lyrics from an artist who's lyrics are in the training set, but the song is not in the training set
+------------------------------------------------------
+#### Given lines:
+
+I could change your life so easily
+
+I keep beggin' you to stay, but you're leavin' me
+
+------------------------------------------------------
+#### Prediction with temperature = 0.15
+
+o could change your life so easily
+
+i keep beggin' you to stay, but you're leavin' me
+
+and i don't wanna be the b****
+
+she got no time she got no feelin'
+
+And i don't wanna know what she want
+
+
+### Generating lyrics with no context
+------------------------------------------------------
+Note temperature is higher to generate lyrics without context, otherwise model will just output the end of song character.
+
+#### Prediction with temperature = 0.25
+
+this is my life
+
+it's time that we'll be the time
+
+and i can't help
+
+just like you, yeah
+
+#### Prediction with temperature = 0.3
+
+you're gonna be like it
+
+and that's the same
+
+it's a wonderful day
+
+it's time that you want to go
+
+if i don't want to say
+
+
+## Successes of our model
+------------------------------------------------------
+
+Model is able to consistantly generate real English words from both seed lyrics and from scratch. The lyrics that are generated make sense and generally fit the context of the song.
+
+## Shortcomings of our model
+------------------------------------------------------
+
+The generated lyrics lack creativity and tend to repeat various lines and phrases. This could be improved by training on a larger portion of the dataset. The lyrics also lack many literary devices that songs have such as alliteration, rhyming, and repitition. Additionally the network tends to end a song when the temperature is too low. Finally, our dataset is skewed heavily towards rap lyrics so the model struggles to generate other genre lyrics. 
