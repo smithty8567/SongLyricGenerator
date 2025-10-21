@@ -98,4 +98,4 @@ Model is able to consistantly generate real English words from both seed lyrics 
 ## Shortcomings of our model
 ------------------------------------------------------
 
-The generated lyrics lack creativity and tend to repeat various lines and phrases. This could be improved by training on a larger portion of the dataset. The lyrics also lack many literary devices that songs have such as alliteration, rhyming, and repitition. Additionally the network tends to end a song when the temperature is too low. Finally, our dataset is skewed heavily towards rap lyrics so the model struggles to generate other genre lyrics. 
+The generated lyrics lack creativity and tend to repeat various lines and phrases. This could be improved by training on a larger portion of the dataset. The lyrics also lack many literary devices that songs have such as alliteration, rhyming, and repetition. Additionally the network tends to end a song when the temperature is too low. Finally, our dataset is skewed heavily towards rap lyrics so the model struggles to generate other genre lyrics. 
